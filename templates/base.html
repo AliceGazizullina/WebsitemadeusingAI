@@ -25,6 +25,8 @@
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
+      display: flex;
+      flex-direction: column;
     }
     .wrap {
       max-width: 720px;
@@ -80,14 +82,86 @@
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     .error { color: var(--danger); margin-top: 0.5rem; font-size: 0.9rem; }
     .muted { color: var(--muted); font-size: 0.9rem; }
+    .site-header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      margin-bottom: 0;
+    }
+    .site-header .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .logo {
+      font-family: 'Unbounded', sans-serif;
+      font-weight: 600;
+      font-size: 1.25rem;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .logo:hover { text-decoration: none; color: var(--accent); }
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .header-nav { display: flex; align-items: center; gap: 1rem; }
+    .header-nav a { font-size: 0.9rem; }
+    .site-footer {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+      padding: 1.25rem 1rem;
+      text-align: center;
+    }
+    .site-footer .wrap { padding: 0 1rem; }
+    .site-footer p { margin: 0.25rem 0; font-size: 0.85rem; color: var(--muted); }
+    .site-footer a { font-size: 0.85rem; }
   </style>
   {% block extra_css %}{% endblock %}
   {% block head %}{% endblock %}
 </head>
 <body>
-  <div class="wrap">
-    {% block content %}{% endblock %}
-  </div>
+  <header class="site-header">
+    <div class="wrap">
+      <a href="{{ url_for('index') }}" class="logo">
+        <span class="logo-icon"></span>
+        Олимпиада
+      </a>
+      <nav class="header-nav">
+        <a href="{{ url_for('index') }}">Главная</a>
+        {% if is_admin %}
+        <a href="{{ url_for('results_page') }}">Результаты</a>
+        <a href="{{ url_for('admin_logout') }}">Выйти</a>
+        {% else %}
+        <a href="{{ url_for('admin_login') }}">Войти</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main style="flex: 1 0 auto;">
+    <div class="wrap">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Олимпиада по Python и Blender</p>
+      <p>Один аккаунт — один раз каждый тест. Результаты сохраняются.</p>
+      <p style="margin-top: 0.5rem;">© 2025</p>
+    </div>
+  </footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>

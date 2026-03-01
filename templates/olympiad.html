@@ -18,6 +18,8 @@
   }
   .track-btn:hover { border-color: var(--accent); background: #222230; }
   .track-btn.selected { border-color: var(--accent); background: rgba(0,212,170,0.1); }
+  .track-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .track-btn.passed { border-color: var(--muted); color: var(--muted); }
   .timer {
     font-size: 1.5rem;
     font-weight: 600;
@@ -47,17 +49,18 @@
 {% block content %}
   <div id="screen-start" class="card">
     <h1>Начать олимпиаду</h1>
-    <p class="muted" style="margin-bottom: 1rem;">У каждого участника одна попытка на каждый трек. Время ограничено.</p>
+    <p class="muted" style="margin-bottom: 1rem;">Один аккаунт (email) — один раз тест по Python и один раз по Blender. Повторно пройти тот же тест нельзя.</p>
     <form id="form-start">
       <label>Имя</label>
       <input type="text" name="name" required placeholder="Иван Иванов">
       <label>Email</label>
-      <input type="email" name="email" required placeholder="ivan@example.com">
+      <input type="email" name="email" required placeholder="ivan@example.com" id="input-email">
       <label>Трек</label>
       <div style="margin-bottom: 0.75rem;">
-        <button type="button" class="track-btn" data-track="python">Python для начинающих</button>
-        <button type="button" class="track-btn" data-track="blender">Blender</button>
+        <button type="button" class="track-btn" data-track="python" id="btn-track-python">Python для начинающих</button>
+        <button type="button" class="track-btn" data-track="blender" id="btn-track-blender">Blender</button>
       </div>
+      <p class="muted" id="track-hint" style="font-size: 0.85rem; margin-top: -0.25rem; margin-bottom: 0.5rem;"></p>
       <input type="hidden" name="track" id="track-input" required>
       <div id="start-error" class="error"></div>
       <button type="submit" style="margin-top: 0.5rem;">Начать</button>
@@ -115,14 +118,74 @@
       const pageInfoEl = document.getElementById('page-info');
       const btnPrev = document.getElementById('btn-prev');
       const btnNext = document.getElementById('btn-next');
+      const inputEmail = document.getElementById('input-email');
+      const btnTrackPython = document.getElementById('btn-track-python');
+      const btnTrackBlender = document.getElementById('btn-track-blender');
+      const trackHint = document.getElementById('track-hint');
+
+      function updateTrackAvailability() {
+        const email = (inputEmail.value || '').trim().toLowerCase();
+        if (!email) {
+          btnTrackPython.disabled = false;
+          btnTrackBlender.disabled = false;
+          btnTrackPython.classList.remove('passed');
+          btnTrackBlender.classList.remove('passed');
+          btnTrackPython.textContent = 'Python для начинающих';
+          btnTrackBlender.textContent = 'Blender';
+          trackHint.textContent = '';
+          return;
+        }
+        fetch('/api/check-tracks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email }),
+          credentials: 'include'
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            btnTrackPython.disabled = !data.python;
+            btnTrackBlender.disabled = !data.blender;
+            btnTrackPython.classList.toggle('passed', !data.python);
+            btnTrackBlender.classList.toggle('passed', !data.blender);
+            btnTrackPython.textContent = data.python ? 'Python для начинающих' : 'Python — уже пройден';
+            btnTrackBlender.textContent = data.blender ? 'Blender' : 'Blender — уже пройден';
+            if (!data.python && !data.blender) {
+              trackHint.textContent = 'Вы уже прошли оба теста по этому email.';
+            } else {
+              trackHint.textContent = '';
+            }
+            if (!data.python && trackInput.value === 'python') trackInput.value = '';
+            if (!data.blender && trackInput.value === 'blender') trackInput.value = '';
+          })
+          .catch(function () {
+            btnTrackPython.disabled = false;
+            btnTrackBlender.disabled = false;
+            btnTrackPython.classList.remove('passed');
+            btnTrackBlender.classList.remove('passed');
+          });
+      }
+      inputEmail.addEventListener('blur', updateTrackAvailability);
 
       document.querySelectorAll('.track-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
+          if (btn.disabled) return;
           document.querySelectorAll('.track-btn').forEach(function (b) { b.classList.remove('selected'); });
           btn.classList.add('selected');
           trackInput.value = btn.dataset.track;
         });
       });
+
+      (function applyTrackFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        var track = (params.get('track') || '').toLowerCase();
+        if (track !== 'python' && track !== 'blender') return;
+        var btn = document.getElementById('btn-track-' + track);
+        if (!btn) return;
+        trackInput.value = track;
+        document.querySelectorAll('.track-btn').forEach(function (b) { b.classList.remove('selected'); });
+        btn.classList.add('selected');
+        updateTrackAvailability();
+      })();
 
       function formatTime(sec) {
         const m = Math.floor(sec / 60);

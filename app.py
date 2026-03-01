@@ -43,9 +43,15 @@ def get_max_score(track):
     return sum(q["points"] for q in QUESTIONS.get(track, []))
 
 
+@app.context_processor
+def inject_admin():
+    """Чтобы во всех шаблонах была переменная is_admin."""
+    return {"is_admin": is_admin()}
+
+
 @app.route("/")
 def index():
-    return render_template("index.html", is_admin=is_admin())
+    return render_template("index.html")
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
@@ -67,11 +73,27 @@ def admin_logout():
     return redirect(url_for("index"))
 
 
+@app.route("/api/check-tracks", methods=["POST"])
+def check_tracks():
+    """По email вернуть, какие треки ещё можно пройти (один раз Python, один раз Blender на аккаунт)."""
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"python": True, "blender": True})
+    participant = Participant.query.filter_by(email=email).first()
+    if not participant:
+        return jsonify({"python": True, "blender": True})
+    return jsonify({
+        "python": participant.can_start_track("python"),
+        "blender": participant.can_start_track("blender"),
+    })
+
+
 @app.route("/api/start", methods=["POST"])
 def start_attempt():
     """Начать попытку. Один раз на трек на участника."""
     data = request.get_json() or {}
-    email = (data.get("email") or "").strip()
+    email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip()
     track = (data.get("track") or "").strip().lower()
 

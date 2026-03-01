@@ -1,21 +1,74 @@
 {% extends "base.html" %}
 {% block title %}Олимпиада — Python и Blender{% endblock %}
+{% block extra_css %}
+  <style>
+  .hero {
+    text-align: center;
+    padding: 2rem 0 1.5rem;
+  }
+  .hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  .hero .muted { font-size: 1rem; max-width: 480px; margin: 0 auto; }
+  .track-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+  @media (max-width: 560px) {
+    .track-cards { grid-template-columns: 1fr; }
+  }
+  .track-card {
+    display: block;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  }
+  .track-card:hover {
+    border-color: var(--accent);
+    background: rgba(0, 212, 170, 0.06);
+    text-decoration: none;
+    color: var(--text);
+    transform: translateY(-2px);
+  }
+  .track-card .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+  .track-card h2 { font-size: 1.15rem; margin-bottom: 0.35rem; }
+  .track-card .muted { font-size: 0.85rem; }
+  .about-card { margin-top: 2rem; }
+  .about-card ul { margin: 0.5rem 0 0 1.25rem; }
+  .about-card li { margin-bottom: 0.35rem; }
+  </style>
+{% endblock %}
 {% block content %}
-  <div class="card">
-    <h1>Олимпиада</h1>
-    <p class="muted">Python для начинающих и Blender. Один проход на трек, на время. Результаты сохраняются в базу.</p>
-    <p style="margin-top: 0.5rem;"><a href="{{ url_for('olympiad_page') }}">→ Перейти к олимпиаде</a></p>
+  <section class="hero">
+    <h1>Олимпиада по Python и Blender</h1>
+    <p class="muted">Проверьте свои знания: тест по программированию на Python или по 3D-моделированию в Blender. Один проход на каждый трек по одному аккаунту.</p>
+  </section>
+
+  <section class="track-cards">
+    <a href="{{ url_for('olympiad_page') }}?track=python" class="track-card">
+      <div class="icon">🐍</div>
+      <h2>Тест по Python</h2>
+      <p class="muted">Основы программирования: типы данных, циклы, функции, задачи с вводом ответа. 100 вопросов, ограничение по времени.</p>
+    </a>
+    <a href="{{ url_for('olympiad_page') }}?track=blender" class="track-card">
+      <div class="icon">🎬</div>
+      <h2>Тест по Blender</h2>
+      <p class="muted">Интерфейс, горячие клавиши, модификаторы, анимация и загрузка своей 3D-модели. 100 вопросов, ограничение по времени.</p>
+    </a>
+  </section>
+
+  <div class="card about-card">
+    <h2>Об олимпиаде</h2>
+    <ul>
+      <li><strong>Треки:</strong> Python для начинающих и Blender. Можно пройти оба, но каждый — только один раз с одного аккаунта (email).</li>
+      <li><strong>Формат:</strong> тест с выбором ответа и заданиями с вводом ответа (Python); в Blender в конце — загрузка файла или скриншота модели.</li>
+      <li><strong>Время:</strong> на Python — 90 минут, на Blender — 120 минут. Таймер показывается во время прохождения.</li>
+      <li><strong>Результаты:</strong> сохраняются в базу. Итоговый балл и время отображаются после отправки ответов.</li>
+    </ul>
   </div>
-  {% if is_admin %}
-  <div class="card">
-    <h2>Результаты</h2>
-    <p class="muted">Таблица сохранённых результатов (для организаторов).</p>
-    <p style="margin-top: 0.5rem;"><a href="{{ url_for('results_page') }}">→ Смотреть результаты</a></p>
-    <p class="muted" style="margin-top: 0.5rem;"><a href="{{ url_for('admin_logout') }}">Выйти</a></p>
-  </div>
-  {% else %}
-  <div class="card">
-    <p class="muted"><a href="{{ url_for('admin_login') }}">Войти как администратор</a></p>
-  </div>
-  {% endif %}
 {% endblock %}
