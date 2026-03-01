@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Прохождение олимпиады{% endblock %}
 {% block extra_css %}
+  <style>
   .track-btn {
     display: block;
     width: 100%;
@@ -34,6 +35,7 @@
   #screen-quiz { display: none; }
   #screen-done { display: none; }
   .score-result { font-size: 1.25rem; margin: 1rem 0; color: var(--accent); }
+  </style>
 {% endblock %}
 {% block content %}
   <div id="screen-start" class="card">
@@ -147,7 +149,7 @@
               state.timeLimit = _.data.time_limit_seconds;
               state.questions = _.data.questions || [];
               state.track = _.data.track;
-              state.startedAt = new Date(_.data.started_at).getTime();
+              state.startedAt = Date.now();
               state.deadline = state.startedAt + state.timeLimit * 1000;
               questionsContainer.innerHTML = '';
               state.questions.forEach(function (q) {

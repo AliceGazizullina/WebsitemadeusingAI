@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Результаты олимпиады{% endblock %}
 {% block extra_css %}
+  <style>
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; }
   tr:hover { background: rgba(255,255,255,0.03); }
   .back { margin-bottom: 1rem; }
+  </style>
 {% endblock %}
 {% block content %}
   <div class="back">
