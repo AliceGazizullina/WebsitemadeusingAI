@@ -35,6 +35,13 @@
   #screen-quiz { display: none; }
   #screen-done { display: none; }
   .score-result { font-size: 1.25rem; margin: 1rem 0; color: var(--accent); }
+  .quiz-page { display: none; }
+  .quiz-page.active { display: block; }
+  .pagination { display: flex; align-items: center; justify-content: space-between; margin: 1rem 0; flex-wrap: wrap; gap: 0.5rem; }
+  .pagination .page-info { color: var(--muted); }
+  .text-answer { width: 100%; padding: 0.6rem; margin-top: 0.25rem; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+  .file-upload { margin-top: 0.5rem; }
+  .file-upload input[type="file"] { margin-top: 0.25rem; }
   </style>
 {% endblock %}
 {% block content %}
@@ -61,6 +68,11 @@
     <div class="timer" id="timer">--:--</div>
     <form id="form-quiz">
       <div id="questions-container"></div>
+      <div class="pagination" id="pagination" style="display: none;">
+        <button type="button" id="btn-prev">← Назад</button>
+        <span class="page-info" id="page-info">Страница 1 из 1</span>
+        <button type="button" id="btn-next">Вперёд →</button>
+      </div>
       <div id="submit-error" class="error"></div>
       <button type="submit" id="btn-submit">Отправить ответы</button>
     </form>
@@ -93,9 +105,16 @@
         deadline: null,
         timerInterval: null,
         questions: [],
+        questionsPerPage: 10,
         track: null,
-        startedAt: null
+        startedAt: null,
+        currentPage: 0,
+        totalPages: 1
       };
+      const paginationEl = document.getElementById('pagination');
+      const pageInfoEl = document.getElementById('page-info');
+      const btnPrev = document.getElementById('btn-prev');
+      const btnNext = document.getElementById('btn-next');
 
       document.querySelectorAll('.track-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -148,28 +167,67 @@
             if (_.ok) {
               state.timeLimit = _.data.time_limit_seconds;
               state.questions = _.data.questions || [];
+              state.questionsPerPage = _.data.questions_per_page || 10;
               state.track = _.data.track;
               state.startedAt = Date.now();
               state.deadline = state.startedAt + state.timeLimit * 1000;
+              state.totalPages = Math.max(1, Math.ceil(state.questions.length / state.questionsPerPage));
+              state.currentPage = 0;
               questionsContainer.innerHTML = '';
-              state.questions.forEach(function (q) {
-                const div = document.createElement('div');
-                div.className = 'question-block';
-                div.innerHTML = '<label>' + q.text + ' <span class="muted">(' + (q.points || 0) + ' б.)</span></label>';
-                (q.options || []).forEach(function (opt) {
-                  const label = document.createElement('label');
-                  label.className = 'opt';
-                  const radio = document.createElement('input');
-                  radio.type = 'radio';
-                  radio.name = q.id;
-                  radio.value = opt;
-                  label.appendChild(radio);
-                  label.appendChild(document.createTextNode(opt));
-                  label.addEventListener('click', function () { radio.checked = true; });
-                  div.appendChild(label);
-                });
-                questionsContainer.appendChild(div);
-              });
+              for (let page = 0; page < state.totalPages; page++) {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'quiz-page' + (page === 0 ? ' active' : '');
+                pageDiv.dataset.page = page;
+                const start = page * state.questionsPerPage;
+                const end = Math.min(start + state.questionsPerPage, state.questions.length);
+                for (let i = start; i < end; i++) {
+                  const q = state.questions[i];
+                  const div = document.createElement('div');
+                  div.className = 'question-block';
+                  div.innerHTML = '<label>' + q.text + ' <span class="muted">(' + (q.points || 0) + ' б.)</span></label>';
+                  const qtype = q.type || 'single';
+                  if (qtype === 'single' && (q.options || []).length) {
+                    (q.options || []).forEach(function (opt) {
+                      const label = document.createElement('label');
+                      label.className = 'opt';
+                      const radio = document.createElement('input');
+                      radio.type = 'radio';
+                      radio.name = q.id;
+                      radio.value = opt;
+                      label.appendChild(radio);
+                      label.appendChild(document.createTextNode(opt));
+                      label.addEventListener('click', function () { radio.checked = true; });
+                      div.appendChild(label);
+                    });
+                  } else if (qtype === 'text') {
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'text-answer';
+                    inp.name = q.id;
+                    inp.placeholder = 'Введите ответ';
+                    div.appendChild(inp);
+                  } else if (qtype === 'file') {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'file-upload';
+                    const inp = document.createElement('input');
+                    inp.type = 'file';
+                    inp.name = q.id;
+                    inp.accept = '.blend,.png,.jpg,.jpeg';
+                    wrap.appendChild(inp);
+                    div.appendChild(wrap);
+                  }
+                  pageDiv.appendChild(div);
+                }
+                questionsContainer.appendChild(pageDiv);
+              }
+              if (state.totalPages > 1) {
+                paginationEl.style.display = 'flex';
+                pageInfoEl.textContent = 'Страница 1 из ' + state.totalPages;
+                btnPrev.disabled = true;
+                btnNext.disabled = state.totalPages <= 1;
+              } else {
+                paginationEl.style.display = 'none';
+              }
               screenStart.style.display = 'none';
               screenQuiz.style.display = 'block';
               timerEl.classList.remove('warning', 'danger');
@@ -182,22 +240,64 @@
           .catch(function () { startError.textContent = 'Ошибка сети.'; });
       });
 
+      function goToPage(page) {
+        page = Math.max(0, Math.min(page, state.totalPages - 1));
+        state.currentPage = page;
+        questionsContainer.querySelectorAll('.quiz-page').forEach(function (p, i) {
+          p.classList.toggle('active', i === page);
+        });
+        pageInfoEl.textContent = 'Страница ' + (page + 1) + ' из ' + state.totalPages;
+        btnPrev.disabled = page <= 0;
+        btnNext.disabled = page >= state.totalPages - 1;
+      }
+      btnPrev.addEventListener('click', function () { goToPage(state.currentPage - 1); });
+      btnNext.addEventListener('click', function () { goToPage(state.currentPage + 1); });
+
+      function hasFileQuestion() {
+        return state.questions.some(function (q) { return (q.type || 'single') === 'file'; });
+      }
+
       formQuiz.addEventListener('submit', function (e) {
         e.preventDefault();
         submitError.textContent = '';
         const answers = {};
         state.questions.forEach(function (q) {
-          const el = document.querySelector('input[name="' + q.id + '"]:checked');
-          answers[q.id] = el ? el.value : '';
+          const qtype = q.type || 'single';
+          if (qtype === 'single') {
+            const el = document.querySelector('input[name="' + q.id + '"]:checked');
+            answers[q.id] = el ? el.value : '';
+          } else if (qtype === 'text') {
+            const el = document.querySelector('input[name="' + q.id + '"].text-answer') || document.querySelector('input[type="text"][name="' + q.id + '"]');
+            answers[q.id] = el ? el.value : '';
+          } else if (qtype === 'file') {
+            const el = document.querySelector('input[type="file"][name="' + q.id + '"]');
+            answers[q.id] = (el && el.files && el.files[0]) ? 'uploaded' : '';
+          }
         });
         const timeSpent = Math.round((Date.now() - state.startedAt) / 1000);
         if (state.timerInterval) clearInterval(state.timerInterval);
-        fetch('/api/submit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ answers: answers, time_spent_seconds: timeSpent }),
-          credentials: 'include'
-        })
+        const useFormData = hasFileQuestion();
+        let promise;
+        if (useFormData) {
+          const fd = new FormData();
+          fd.append('answers', JSON.stringify(answers));
+          fd.append('time_spent_seconds', String(timeSpent));
+          state.questions.forEach(function (q) {
+            if ((q.type || 'single') === 'file') {
+              const el = document.querySelector('input[type="file"][name="' + q.id + '"]');
+              if (el && el.files && el.files[0]) fd.append(q.id, el.files[0]);
+            }
+          });
+          promise = fetch('/api/submit', { method: 'POST', body: fd, credentials: 'include' });
+        } else {
+          promise = fetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answers: answers, time_spent_seconds: timeSpent }),
+            credentials: 'include'
+          });
+        }
+        promise
           .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data }; }); })
           .then(function (_) {
             if (_.ok) {

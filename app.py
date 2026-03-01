@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, send_from_directory
 from config import (
     SQLALCHEMY_DATABASE_URI,
     SQLALCHEMY_TRACK_MODIFICATIONS,
@@ -11,112 +12,31 @@ from config import (
     BLENDER_TIME_LIMIT,
 )
 from models import db, Participant, Attempt
+from data.questions import QUESTIONS
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = SQLALCHEMY_TRACK_MODIFICATIONS
 app.config["SECRET_KEY"] = SECRET_KEY
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB max per file
 db.init_app(app)
 
 TIME_LIMITS = {"python": PYTHON_TIME_LIMIT, "blender": BLENDER_TIME_LIMIT}
+QUESTIONS_PER_PAGE = 10
 
 
 def is_admin():
     return session.get("admin") is True
 
 
-# --- Вопросы олимпиады (примеры, можно расширить) ---
-QUESTIONS = {
-    "python": [
-        {
-            "id": "p1",
-            "text": "Что выведет: print(2 + 3 * 2)?",
-            "type": "single",
-            "options": ["8", "10", "12", "7"],
-            "correct": "8",
-            "points": 5,
-        },
-        {
-            "id": "p2",
-            "text": "Какой тип у значения 3.14?",
-            "type": "single",
-            "options": ["int", "float", "str", "bool"],
-            "correct": "float",
-            "points": 5,
-        },
-        {
-            "id": "p3",
-            "text": "Что делает range(3)?",
-            "type": "single",
-            "options": [
-                "Создаёт список [0, 1, 2]",
-                "Создаёт последовательность 0, 1, 2",
-                "Возвращает число 3",
-                "Ошибка",
-            ],
-            "correct": "Создаёт последовательность 0, 1, 2",
-            "points": 5,
-        },
-        {
-            "id": "p4",
-            "text": "Выберите правильное объявление списка в Python.",
-            "type": "single",
-            "options": ["list = ()", "list = []", "list = {}", "list = ([])"],
-            "correct": "list = []",
-            "points": 5,
-        },
-        {
-            "id": "p5",
-            "text": "Что выведет: len('Привет')?",
-            "type": "single",
-            "options": ["5", "6", "7", "Ошибка"],
-            "correct": "6",
-            "points": 5,
-        },
-    ],
-    "blender": [
-        {
-            "id": "b1",
-            "text": "Какой горячей клавишей создаётся куб в Blender?",
-            "type": "single",
-            "options": ["Shift+A", "Ctrl+C", "G", "S"],
-            "correct": "Shift+A",
-            "points": 10,
-        },
-        {
-            "id": "b2",
-            "text": "Что означает G в режиме редактирования?",
-            "type": "single",
-            "options": ["Grab (перемещение)", "Group", "Grid", "Gradient"],
-            "correct": "Grab (перемещение)",
-            "points": 10,
-        },
-        {
-            "id": "b3",
-            "text": "Как переключиться в режим редактирования?",
-            "type": "single",
-            "options": ["Tab", "E", "Ctrl+Tab", "F"],
-            "correct": "Tab",
-            "points": 10,
-        },
-        {
-            "id": "b4",
-            "text": "Какой рендер по умолчанию в Blender 3.x?",
-            "type": "single",
-            "options": ["Cycles", "Eevee", "Workbench", "LuxCore"],
-            "correct": "Eevee",
-            "points": 10,
-        },
-        {
-            "id": "b5",
-            "text": "S в режиме редактирования — это:",
-            "type": "single",
-            "options": ["Scale (масштаб)", "Select", "Save", "Smooth"],
-            "correct": "Scale (масштаб)",
-            "points": 10,
-        },
-    ],
-}
+def _normalize_answer(val):
+    if val is None:
+        return ""
+    s = str(val).strip()
+    return s
 
 
 def get_max_score(track):
@@ -191,12 +111,23 @@ def start_attempt():
         "time_limit_seconds": TIME_LIMITS[track],
         "started_at": attempt.started_at.isoformat(),
         "questions": QUESTIONS[track],
+        "questions_per_page": QUESTIONS_PER_PAGE,
     })
+
+
+def _check_text_answer(user_val, correct_val):
+    u = _normalize_answer(user_val)
+    c = _normalize_answer(correct_val)
+    if u == c:
+        return True
+    if u.lower() == c.lower():
+        return True
+    return False
 
 
 @app.route("/api/submit", methods=["POST"])
 def submit_attempt():
-    """Отправить ответы и завершить попытку. Результат сохраняется в БД."""
+    """Отправить ответы и завершить попытку. Результат сохраняется в БД. Поддерживает JSON и multipart (для файлов)."""
     attempt_id = session.get("attempt_id")
     if not attempt_id:
         return jsonify({"ok": False, "error": "Нет активной попытки."}), 403
@@ -205,19 +136,51 @@ def submit_attempt():
     if not attempt or attempt.finished_at:
         return jsonify({"ok": False, "error": "Попытка уже завершена или не найдена."}), 403
 
-    data = request.get_json() or {}
-    answers = data.get("answers", {})
-    time_spent_seconds = data.get("time_spent_seconds")
+    if request.content_type and "multipart/form-data" in request.content_type:
+        answers = {}
+        try:
+            raw = request.form.get("answers")
+            if raw:
+                answers = json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+        time_spent_seconds = request.form.get("time_spent_seconds", type=int) or 0
+        questions = QUESTIONS.get(attempt.track, [])
+        upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], str(attempt_id))
+        for q in questions:
+            if q.get("type") == "file" and q.get("id"):
+                qid = q["id"]
+                f = request.files.get(qid)
+                if f and f.filename:
+                    os.makedirs(upload_dir, exist_ok=True)
+                    safe_name = f.filename.replace("..", "").strip() or "file"
+                    if len(safe_name) > 100:
+                        safe_name = safe_name[-100:]
+                    path = os.path.join(upload_dir, safe_name)
+                    f.save(path)
+                    rel = os.path.join(str(attempt_id), safe_name)
+                    answers[qid] = rel
+    else:
+        data = request.get_json() or {}
+        answers = data.get("answers", {})
+        time_spent_seconds = data.get("time_spent_seconds")
 
-    # Подсчёт баллов
     questions = QUESTIONS.get(attempt.track, [])
     score = 0
     for q in questions:
         qid = q["id"]
+        qtype = q.get("type", "single")
         correct = q.get("correct")
         user_ans = answers.get(qid)
-        if user_ans is not None and str(user_ans).strip() == str(correct).strip():
-            score += q.get("points", 0)
+        if qtype == "single":
+            if user_ans is not None and _normalize_answer(user_ans) == _normalize_answer(correct):
+                score += q.get("points", 0)
+        elif qtype == "text":
+            if user_ans is not None and _check_text_answer(user_ans, correct):
+                score += q.get("points", 0)
+        elif qtype == "file":
+            if user_ans and str(user_ans).strip():
+                score += q.get("points", 0)
 
     attempt.score = score
     attempt.max_score = get_max_score(attempt.track)
@@ -243,6 +206,14 @@ def olympiad_page():
     return render_template("olympiad.html")
 
 
+@app.route("/uploads/<path:filename>")
+def upload_file(filename):
+    """Скачать загруженный файл (только для администратора)."""
+    if not is_admin():
+        return redirect(url_for("admin_login"))
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=True)
+
+
 @app.route("/results")
 def results_page():
     """Страница с последними результатами — только для администратора."""
@@ -256,6 +227,13 @@ def results_page():
     )
     rows = []
     for a in attempts:
+        upload_path = None
+        if a.answers_json and a.track == "blender":
+            try:
+                ans = json.loads(a.answers_json)
+                upload_path = ans.get("b100", "").strip() or None
+            except (ValueError, TypeError):
+                pass
         rows.append({
             "id": a.id,
             "name": a.participant.name,
@@ -265,6 +243,7 @@ def results_page():
             "max_score": a.max_score,
             "time_spent_seconds": a.time_spent_seconds,
             "finished_at": a.finished_at.isoformat() if a.finished_at else None,
+            "upload_path": upload_path,
         })
     return render_template("results.html", results=rows)
 

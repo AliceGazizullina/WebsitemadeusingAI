@@ -29,6 +29,7 @@
             <th>Баллы</th>
             <th>Время</th>
             <th>Завершено</th>
+            <th>Файл</th>
           </tr>
         </thead>
         <tbody>
@@ -38,8 +39,9 @@
             <td>{{ r.email }}</td>
             <td>{{ r.track }}</td>
             <td>{{ r.score }} / {{ r.max_score }}</td>
-            <td>{{ (r.time_spent_seconds // 60) }} мин</td>
+            <td>{% if r.time_spent_seconds is not none %}{{ (r.time_spent_seconds // 60) }} мин {{ (r.time_spent_seconds % 60) }} сек{% else %}—{% endif %}</td>
             <td>{{ r.finished_at[:19] if r.finished_at else '—' }}</td>
+            <td>{% if r.upload_path %}<a href="{{ url_for('upload_file', filename=r.upload_path) }}">Скачать</a>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>

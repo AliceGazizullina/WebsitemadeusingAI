@@ -11,6 +11,6 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "olympiad-secret-key-change-in-product
 # Пароль администратора (для входа и просмотра результатов)
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 
-# Время на прохождение в секундах (например, 45 минут)
-PYTHON_TIME_LIMIT = 45 * 60
-BLENDER_TIME_LIMIT = 60 * 60
+# Время на прохождение в секундах (100 вопросов: 90 мин Python, 120 мин Blender)
+PYTHON_TIME_LIMIT = 90 * 60
+BLENDER_TIME_LIMIT = 120 * 60
