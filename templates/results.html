@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Результаты олимпиады{% endblock %}
+{% block extra_css %}
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  tr:hover { background: rgba(255,255,255,0.03); }
+  .back { margin-bottom: 1rem; }
+{% endblock %}
+{% block content %}
+  <div class="back"><a href="{{ url_for('index') }}">← На главную</a></div>
+  <div class="card">
+    <h1>Результаты олимпиады</h1>
+    <p class="muted" style="margin-bottom: 1rem;">Данные из базы (последние 100 попыток).</p>
+    {% if results %}
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Имя</th>
+            <th>Email</th>
+            <th>Трек</th>
+            <th>Баллы</th>
+            <th>Время</th>
+            <th>Завершено</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.email }}</td>
+            <td>{{ r.track }}</td>
+            <td>{{ r.score }} / {{ r.max_score }}</td>
+            <td>{{ (r.time_spent_seconds // 60) }} мин</td>
+            <td>{{ r.finished_at[:19] if r.finished_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Пока нет сохранённых результатов.</p>
+    {% endif %}
+  </div>
+{% endblock %}

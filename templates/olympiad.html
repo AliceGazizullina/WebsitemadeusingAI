@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Прохождение олимпиады{% endblock %}
+{% block extra_css %}
+  .track-btn {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    text-align: left;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .track-btn:hover { border-color: var(--accent); background: #222230; }
+  .track-btn.selected { border-color: var(--accent); background: rgba(0,212,170,0.1); }
+  .timer {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+  .timer.warning { color: #ffa502; }
+  .timer.danger { color: var(--danger); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.7; } }
+  .question-block { margin-bottom: 1.5rem; }
+  .question-block label { display: block; margin-bottom: 0.5rem; }
+  .opt { display: flex; align-items: center; margin-bottom: 0.4rem; cursor: pointer; }
+  .opt input { width: auto; margin: 0 0.5rem 0 0; }
+  #screen-start { }
+  #screen-quiz { display: none; }
+  #screen-done { display: none; }
+  .score-result { font-size: 1.25rem; margin: 1rem 0; color: var(--accent); }
+{% endblock %}
+{% block content %}
+  <div id="screen-start" class="card">
+    <h1>Начать олимпиаду</h1>
+    <p class="muted" style="margin-bottom: 1rem;">У каждого участника одна попытка на каждый трек. Время ограничено.</p>
+    <form id="form-start">
+      <label>Имя</label>
+      <input type="text" name="name" required placeholder="Иван Иванов">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="ivan@example.com">
+      <label>Трек</label>
+      <div style="margin-bottom: 0.75rem;">
+        <button type="button" class="track-btn" data-track="python">Python для начинающих</button>
+        <button type="button" class="track-btn" data-track="blender">Blender</button>
+      </div>
+      <input type="hidden" name="track" id="track-input" required>
+      <div id="start-error" class="error"></div>
+      <button type="submit" style="margin-top: 0.5rem;">Начать</button>
+    </form>
+  </div>
+
+  <div id="screen-quiz" class="card">
+    <div class="timer" id="timer">--:--</div>
+    <form id="form-quiz">
+      <div id="questions-container"></div>
+      <div id="submit-error" class="error"></div>
+      <button type="submit" id="btn-submit">Отправить ответы</button>
+    </form>
+  </div>
+
+  <div id="screen-done" class="card">
+    <h1>Результат</h1>
+    <p class="score-result" id="score-text"></p>
+    <p class="muted">Результат сохранён в базу данных.</p>
+    <p style="margin-top: 1rem;"><a href="{{ url_for('olympiad_page') }}">Вернуться на страницу олимпиады</a></p>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function () {
+      const screenStart = document.getElementById('screen-start');
+      const screenQuiz = document.getElementById('screen-quiz');
+      const screenDone = document.getElementById('screen-done');
+      const formStart = document.getElementById('form-start');
+      const formQuiz = document.getElementById('form-quiz');
+      const trackInput = document.getElementById('track-input');
+      const startError = document.getElementById('start-error');
+      const submitError = document.getElementById('submit-error');
+      const timerEl = document.getElementById('timer');
+      const questionsContainer = document.getElementById('questions-container');
+      const scoreText = document.getElementById('score-text');
+
+      let state = {
+        timeLimit: 0,
+        deadline: null,
+        timerInterval: null,
+        questions: [],
+        track: null,
+        startedAt: null
+      };
+
+      document.querySelectorAll('.track-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.track-btn').forEach(function (b) { b.classList.remove('selected'); });
+          btn.classList.add('selected');
+          trackInput.value = btn.dataset.track;
+        });
+      });
+
+      function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function tick() {
+        if (!state.deadline) return;
+        const left = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
+        timerEl.textContent = formatTime(left);
+        timerEl.classList.remove('warning', 'danger');
+        if (left <= 60) timerEl.classList.add('danger');
+        else if (left <= 300) timerEl.classList.add('warning');
+        if (left <= 0) {
+          clearInterval(state.timerInterval);
+          formQuiz.requestSubmit();
+        }
+      }
+
+      formStart.addEventListener('submit', function (e) {
+        e.preventDefault();
+        startError.textContent = '';
+        const fd = new FormData(formStart);
+        const payload = {
+          name: fd.get('name'),
+          email: fd.get('email'),
+          track: fd.get('track')
+        };
+        if (!payload.track) {
+          startError.textContent = 'Выберите трек (Python или Blender).';
+          return;
+        }
+        fetch('/api/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data }; }); })
+          .then(function (_) {
+            if (_.ok) {
+              state.timeLimit = _.data.time_limit_seconds;
+              state.questions = _.data.questions || [];
+              state.track = _.data.track;
+              state.startedAt = new Date(_.data.started_at).getTime();
+              state.deadline = state.startedAt + state.timeLimit * 1000;
+              questionsContainer.innerHTML = '';
+              state.questions.forEach(function (q) {
+                const div = document.createElement('div');
+                div.className = 'question-block';
+                div.innerHTML = '<label>' + q.text + ' <span class="muted">(' + (q.points || 0) + ' б.)</span></label>';
+                (q.options || []).forEach(function (opt) {
+                  const label = document.createElement('label');
+                  label.className = 'opt';
+                  const radio = document.createElement('input');
+                  radio.type = 'radio';
+                  radio.name = q.id;
+                  radio.value = opt;
+                  label.appendChild(radio);
+                  label.appendChild(document.createTextNode(opt));
+                  label.addEventListener('click', function () { radio.checked = true; });
+                  div.appendChild(label);
+                });
+                questionsContainer.appendChild(div);
+              });
+              screenStart.style.display = 'none';
+              screenQuiz.style.display = 'block';
+              timerEl.classList.remove('warning', 'danger');
+              state.timerInterval = setInterval(tick, 500);
+              tick();
+            } else {
+              startError.textContent = _.data.error || 'Ошибка старта';
+            }
+          })
+          .catch(function () { startError.textContent = 'Ошибка сети.'; });
+      });
+
+      formQuiz.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitError.textContent = '';
+        const answers = {};
+        state.questions.forEach(function (q) {
+          const el = document.querySelector('input[name="' + q.id + '"]:checked');
+          answers[q.id] = el ? el.value : '';
+        });
+        const timeSpent = Math.round((Date.now() - state.startedAt) / 1000);
+        if (state.timerInterval) clearInterval(state.timerInterval);
+        fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: answers, time_spent_seconds: timeSpent })
+        })
+          .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data }; }); })
+          .then(function (_) {
+            if (_.ok) {
+              screenQuiz.style.display = 'none';
+              screenDone.style.display = 'block';
+              scoreText.textContent = 'Баллы: ' + _.data.score + ' из ' + _.data.max_score + '. Время: ' + formatTime(_.data.time_spent_seconds || 0);
+            } else {
+              submitError.textContent = _.data.error || 'Ошибка отправки';
+            }
+          })
+          .catch(function () { submitError.textContent = 'Ошибка сети.'; });
+      });
+    })();
+  </script>
+{% endblock %}

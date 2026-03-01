@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Олимпиада — Python и Blender{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>Олимпиада</h1>
+    <p class="muted">Python для начинающих и Blender. Один проход на трек, на время. Результаты сохраняются в базу.</p>
+    <p style="margin-top: 0.5rem;"><a href="{{ url_for('olympiad_page') }}">→ Перейти к олимпиаде</a></p>
+  </div>
+  <div class="card">
+    <h2>Результаты</h2>
+    <p class="muted">Таблица сохранённых результатов (для организаторов).</p>
+    <p style="margin-top: 0.5rem;"><a href="{{ url_for('results_page') }}">→ Смотреть результаты</a></p>
+  </div>
+{% endblock %}
