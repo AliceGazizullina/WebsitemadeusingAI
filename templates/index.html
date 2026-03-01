@@ -6,9 +6,16 @@
     <p class="muted">Python для начинающих и Blender. Один проход на трек, на время. Результаты сохраняются в базу.</p>
     <p style="margin-top: 0.5rem;"><a href="{{ url_for('olympiad_page') }}">→ Перейти к олимпиаде</a></p>
   </div>
+  {% if is_admin %}
   <div class="card">
     <h2>Результаты</h2>
     <p class="muted">Таблица сохранённых результатов (для организаторов).</p>
     <p style="margin-top: 0.5rem;"><a href="{{ url_for('results_page') }}">→ Смотреть результаты</a></p>
+    <p class="muted" style="margin-top: 0.5rem;"><a href="{{ url_for('admin_logout') }}">Выйти</a></p>
   </div>
+  {% else %}
+  <div class="card">
+    <p class="muted"><a href="{{ url_for('admin_login') }}">Войти как администратор</a></p>
+  </div>
+  {% endif %}
 {% endblock %}

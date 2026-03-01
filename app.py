@@ -6,6 +6,7 @@ from config import (
     SQLALCHEMY_DATABASE_URI,
     SQLALCHEMY_TRACK_MODIFICATIONS,
     SECRET_KEY,
+    ADMIN_PASSWORD,
     PYTHON_TIME_LIMIT,
     BLENDER_TIME_LIMIT,
 )
@@ -18,6 +19,10 @@ app.config["SECRET_KEY"] = SECRET_KEY
 db.init_app(app)
 
 TIME_LIMITS = {"python": PYTHON_TIME_LIMIT, "blender": BLENDER_TIME_LIMIT}
+
+
+def is_admin():
+    return session.get("admin") is True
 
 
 # --- Вопросы олимпиады (примеры, можно расширить) ---
@@ -120,7 +125,26 @@ def get_max_score(track):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", is_admin=is_admin())
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "GET":
+        if is_admin():
+            return redirect(url_for("results_page"))
+        return render_template("admin_login.html")
+    password = (request.form.get("password") or "").strip()
+    if password == ADMIN_PASSWORD:
+        session["admin"] = True
+        return redirect(url_for("results_page"))
+    return render_template("admin_login.html", error="Неверный пароль.")
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin", None)
+    return redirect(url_for("index"))
 
 
 @app.route("/api/start", methods=["POST"])
@@ -221,7 +245,9 @@ def olympiad_page():
 
 @app.route("/results")
 def results_page():
-    """Страница с последними результатами (для организаторов можно защитить)."""
+    """Страница с последними результатами — только для администратора."""
+    if not is_admin():
+        return redirect(url_for("admin_login"))
     attempts = (
         Attempt.query.filter(Attempt.finished_at.isnot(None))
         .order_by(Attempt.finished_at.desc())

@@ -8,6 +8,8 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
 )
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SECRET_KEY = os.environ.get("SECRET_KEY", "olympiad-secret-key-change-in-production")
+# Пароль администратора (для входа и просмотра результатов)
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 
 # Время на прохождение в секундах (например, 45 минут)
 PYTHON_TIME_LIMIT = 45 * 60
